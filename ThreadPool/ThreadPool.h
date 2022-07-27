@@ -66,6 +66,11 @@ public:
 	 */
 	void stop_processing_tasks();
 
+	thread_pool(const thread_pool&) = delete;
+	thread_pool(thread_pool&&) = delete;
+	thread_pool& operator=(thread_pool&&) = delete;
+	thread_pool& operator=(const thread_pool&) = delete;
+
 private:
 	mutable std::mutex mutex_q_;
 	mutable std::mutex mutex_s_;
@@ -87,7 +92,7 @@ inline thread_pool::thread_pool(const size_t num_threads) :last_task_id_(0), is_
 	threads_.reserve(num_threads);
 	for (size_t i = 0; i < num_threads; i++)
 	{
-		threads_.emplace_back([this]() {thread_main(); });
+		threads_.emplace_back([this] {thread_main(); });
 	}
 }
 
