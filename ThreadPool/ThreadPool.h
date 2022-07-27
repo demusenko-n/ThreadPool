@@ -19,32 +19,7 @@ class ThreadPool
 		int64_t taskId{};
 	};
 
-	void threadMain()
-	{
-		while (true)
-		{
-			Task taskToComplete;
-			{
-				std::unique_lock l(mutex_q_);
-				cv_new_task_.wait(l, [this] {return !tasksQueue_.empty(); });
-				if (isTerminated_)
-				{
-
-					break;
-				}
-				taskToComplete = std::move(tasksQueue_.front());
-				tasksQueue_.pop();
-			}
-
-			taskToComplete.executable();
-
-			{
-				std::lock_guard l(mutex_s_);
-				completedTaskIds_.emplace(taskToComplete.taskId);
-			}
-			cv_completed_task_.notify_all();
-		}
-	}
+	void threadMain();
 
 	bool isValidTaskId(int64_t taskId)const;
 public:
@@ -187,4 +162,31 @@ bool ThreadPool::isCompleted(const int64_t taskId)const
 bool ThreadPool::isValidTaskId(const int64_t taskId)const
 {
 	return taskId <= lastTaskId_ && taskId > 0;
+}
+
+void ThreadPool::threadMain()
+{
+	while (true)
+	{
+		Task taskToComplete;
+		{
+			std::unique_lock l(mutex_q_);
+			cv_new_task_.wait(l, [this] {return !tasksQueue_.empty(); });
+			if (isTerminated_)
+			{
+
+				break;
+			}
+			taskToComplete = std::move(tasksQueue_.front());
+			tasksQueue_.pop();
+		}
+
+		taskToComplete.executable();
+
+		{
+			std::lock_guard l(mutex_s_);
+			completedTaskIds_.emplace(taskToComplete.taskId);
+		}
+		cv_completed_task_.notify_all();
+	}
 }
