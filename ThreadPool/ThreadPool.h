@@ -5,35 +5,34 @@
 #include <atomic>
 #include <unordered_set>
 #include <queue>
-#include <shared_mutex>
 #include <condition_variable>
 
 /**
  * \brief ThreadPool class implementation used for effective parallelism
  */
-class ThreadPool
+class thread_pool
 {
-	struct Task
+	struct task
 	{
 		std::function<void()> executable{};
-		int64_t taskId{};
+		size_t task_id{};
 	};
 
-	void threadMain();
+	void thread_main();
 
-	bool isValidTaskId(int64_t taskId)const;
+	bool is_valid_task_id(size_t task_id)const;
 public:
 	/**
 	 * Create a new ThreadPool object
 	 * \brief Constructor.
-	 * \param numThreads Amount of threads in the pool.
+	 * \param num_threads Amount of threads in the pool.
 	 */
-	ThreadPool(size_t numThreads);
+	explicit thread_pool(size_t num_threads);
 
 	/**
 	 * \brief Destructor
 	 */
-	~ThreadPool();
+	~thread_pool();
 
 	/**
 	 * \brief Add new task to queue.
@@ -42,31 +41,30 @@ public:
 	 * \return Id of a new task.
 	 */
 	template<class Func, class... Args>
-	int64_t addTask(Func function, Args&&... args);
+	size_t add_task(Func function, Args&&... args);
 
 	/**
 	 * \brief Determine if the task is completed.
-	 * \param taskId Id of the task.
+	 * \param task_id Id of the task.
 	 * \return Whether the task with the specified id is completed.
 	 */
-	bool isCompleted(int64_t taskId)const;
+	bool is_completed(size_t task_id)const;
 
 	/**
 	 * \brief Blocks calling thread until all tasks in queue are completed.
 	 */
-	void waitAll()const;
+	void wait_all()const;
 
 	/**
 	 * \brief Blocks calling thread until the specified task is completed.
-	 * \param taskId
+	 * \param task_id Id of the task
 	 */
-	void waitTask(int64_t taskId)const;
+	void wait_task(size_t task_id)const;
 
 	/**
 	 * \brief Sends command to all threads in the pool to reject all queued tasks and finish work after finishing current tasks.
-	 * \param taskId
 	 */
-	void stopProcessingTasks();
+	void stop_processing_tasks();
 
 private:
 	mutable std::mutex mutex_q_;
@@ -75,103 +73,103 @@ private:
 	mutable std::condition_variable cv_new_task_;
 	mutable std::condition_variable cv_completed_task_;
 
-	std::queue<Task> tasksQueue_;
-	std::unordered_set<int64_t> completedTaskIds_;
+	std::queue<task> tasks_queue_;
+	std::unordered_set<size_t> completed_task_ids_;
 
-	std::atomic<int64_t> lastTaskId_;
-	std::atomic_bool isTerminated_;
+	std::atomic<size_t> last_task_id_;
+	std::atomic_bool is_terminated_;
 
 	std::vector<std::jthread> threads_;
 };
 
-ThreadPool::ThreadPool(const size_t numThreads) :lastTaskId_(0), isTerminated_(false)
+inline thread_pool::thread_pool(const size_t num_threads) :last_task_id_(0), is_terminated_(false)
 {
-	threads_.reserve(numThreads);
-	for (size_t i = 0; i < numThreads; i++)
+	threads_.reserve(num_threads);
+	for (size_t i = 0; i < num_threads; i++)
 	{
-		threads_.emplace_back([this]() {threadMain(); });
+		threads_.emplace_back([this]() {thread_main(); });
 	}
 }
 
-ThreadPool::~ThreadPool()
+inline thread_pool::~thread_pool()
 {
-	stopProcessingTasks();
+	stop_processing_tasks();
 }
 
-void ThreadPool::waitAll()const
+inline void thread_pool::wait_all()const
 {
 	std::unique_lock l(mutex_s_);
-	cv_completed_task_.wait(l, [this] {return completedTaskIds_.size() == lastTaskId_; });
+	cv_completed_task_.wait(l, [this] {return completed_task_ids_.size() == last_task_id_; });
 }
 
-void ThreadPool::waitTask(const int64_t taskId)const
+inline void thread_pool::wait_task(const size_t task_id)const
 {
-	if (isValidTaskId(taskId))
+	if (is_valid_task_id(task_id))
 	{
 		std::unique_lock l(mutex_s_);
-		cv_completed_task_.wait(l, [this, taskId] {return completedTaskIds_.contains(taskId); });
+		cv_completed_task_.wait(l, [this, task_id] {return completed_task_ids_.contains(task_id); });
 	}
 }
 
-void ThreadPool::stopProcessingTasks()
+inline void thread_pool::stop_processing_tasks()
 {
-	isTerminated_.store(true);
+	is_terminated_.store(true);
 	{
 		std::lock_guard l(mutex_q_);
-		tasksQueue_.emplace();
+		tasks_queue_.emplace();
 	}
 	cv_new_task_.notify_all();
 }
 
 template<class Func, class... Args>
-int64_t ThreadPool::addTask(const Func function, Args&&... args)
+size_t thread_pool::add_task(const Func function, Args&&... args)
 {
 	{
 		std::lock_guard l(mutex_q_);
-		tasksQueue_.emplace(Task{ std::bind(function, std::forward<Args>(args)...), ++lastTaskId_ });
+		tasks_queue_.emplace(task{[function, &args...] { return function(std::forward<Args>(args)...); }, ++last_task_id_ });
 	}
 	cv_new_task_.notify_one();
-	return lastTaskId_;
+	return last_task_id_;
 }
 
-bool ThreadPool::isCompleted(const int64_t taskId)const
+inline bool thread_pool::is_completed(const size_t task_id)const
 {
-	if (!isValidTaskId(taskId))
+	if (!is_valid_task_id(task_id))
 	{
 		return false;
 	}
 
 	std::lock_guard l(mutex_s_);
-	return completedTaskIds_.contains(taskId);
+	return completed_task_ids_.contains(task_id);
 }
 
-bool ThreadPool::isValidTaskId(const int64_t taskId)const
+inline bool thread_pool::is_valid_task_id(const size_t task_id)const
 {
-	return taskId <= lastTaskId_ && taskId > 0;
+	return task_id <= last_task_id_ && task_id > 0;
 }
 
-void ThreadPool::threadMain()
+inline void thread_pool::thread_main()
 {
 	while (true)
 	{
-		Task taskToComplete;
+		task task_to_complete;
 		{
 			std::unique_lock l(mutex_q_);
-			cv_new_task_.wait(l, [this] {return !tasksQueue_.empty(); });
-			if (isTerminated_)
+			cv_new_task_.wait(l, [this] {return !tasks_queue_.empty(); });
+			if (is_terminated_)
 			{
 
 				break;
 			}
-			taskToComplete = std::move(tasksQueue_.front());
-			tasksQueue_.pop();
+			task_to_complete = std::move(tasks_queue_.front());
+			tasks_queue_.pop();
 		}
 
-		taskToComplete.executable();
+		task_to_complete.executable();
 
 		{
 			std::lock_guard l(mutex_s_);
-			completedTaskIds_.emplace(taskToComplete.taskId);
+			completed_task_ids_.emplace(task_to_complete.task_id);
 		}
 		cv_completed_task_.notify_all();
 	}
