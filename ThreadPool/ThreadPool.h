@@ -31,18 +31,6 @@ public:
 	ThreadPool(size_t numThreads);
 
 	/**
-	 * \brief Move constructor.
-	 * \param threadPool Thread Pool to be moved.
-	 */
-	ThreadPool(ThreadPool&& threadPool) = default;
-
-	/**
-	 * \brief Move assignment operator.
-	 * \param threadPool Thread Pool to be moved.
-	 */
-	ThreadPool& operator=(ThreadPool&& threadPool) = default;
-
-	/**
 	 * \brief Destructor
 	 */
 	~ThreadPool();
@@ -80,8 +68,6 @@ public:
 	 */
 	void stopProcessingTasks();
 
-	ThreadPool(const ThreadPool& other) = delete;
-	ThreadPool& operator=(const ThreadPool& threadPool) = default;
 private:
 	mutable std::mutex mutex_q_;
 	mutable std::mutex mutex_s_;
