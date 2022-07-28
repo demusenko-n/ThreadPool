@@ -6,7 +6,6 @@
 #include <condition_variable>
 #include <future>
 #include <memory>
-
 #include "Callable.h"
 
 /**
@@ -42,11 +41,6 @@ public:
 	 */
 	void wait_all()const;
 
-	/**
-	 * \brief Sends command to all threads in the pool to reject all queued tasks and finish work after finishing current tasks.
-	 */
-	void stop_processing_tasks();
-
 	thread_pool(const thread_pool&) = delete;
 	thread_pool(thread_pool&&) = delete;
 	thread_pool& operator=(thread_pool&&) = delete;
@@ -76,7 +70,9 @@ inline thread_pool::thread_pool(const size_t num_threads) :tasks_completed_(0), 
 
 inline thread_pool::~thread_pool()
 {
-	stop_processing_tasks();
+	wait_all();
+	is_terminated_.store(true);
+	cv_new_task_.notify_all();
 }
 
 inline void thread_pool::wait_all()const
@@ -90,11 +86,6 @@ inline void thread_pool::wait_all()const
 	}
 }
 
-inline void thread_pool::stop_processing_tasks()
-{
-	is_terminated_.store(true);
-	cv_new_task_.notify_all();
-}
 
 template<class Function, class... Args>
 std::future<std::invoke_result_t<Function, Args...>> thread_pool::add_task(Function function, Args&&... args)
