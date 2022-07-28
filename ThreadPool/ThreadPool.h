@@ -32,7 +32,7 @@ public:
 	 * \brief Add new task to queue.
 	 * \param function Function to be executed.
 	 * \param args Arguments to the function.
-	 * \return Id of a new task.
+	 * \return std::future object to access the result of operation.
 	 */
 	template<class Function, class... Args>
 	std::future<std::invoke_result_t<Function, Args...>> add_task(Function function, Args&&... args);
