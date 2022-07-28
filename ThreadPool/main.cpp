@@ -22,22 +22,29 @@ int main()
 	using namespace std::chrono_literals;
 	std::cout << "Thread Pool!\n";
 
-	int test = 10;
-
 	thread_pool pool(10);
 
-	auto future = pool.add_task(some_function, test, 5);
+	{
+		int test = 10;
+		auto future = pool.add_task(some_function, test, 5);
 
-	auto future2 = pool.add_task(sh);
+		auto future2 = pool.add_task(sh);
 
+		pool.add_detached_task([] {std::this_thread::sleep_for(std::chrono::seconds(10)); std::cout << "10 seconds passed"; });
+		
+
+		std::cout << future.get() << std::endl;
+
+		std::cout << *future2.get() << std::endl;
+
+
+		std::cout << test << std::endl;
+
+
+	}
+	std::cout << "exited {}" << std::endl;
 	pool.wait_all();
 
-	std::cout << future.get() << std::endl;
-
-	std::cout << *future2.get() << std::endl;
-
-
-	std::cout << test << std::endl;
 
 	return EXIT_SUCCESS;
 }

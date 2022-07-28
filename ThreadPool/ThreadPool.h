@@ -28,13 +28,21 @@ public:
 	~thread_pool();
 
 	/**
-	 * \brief Add new task to queue.
+	 * \brief Add a new task to the queue.
 	 * \param function Function to be executed.
 	 * \param args Arguments to the function.
 	 * \return std::future object to access the result of operation.
 	 */
 	template<class Function, class... Args>
 	std::future<std::invoke_result_t<Function, Args...>> add_task(Function function, Args&&... args);
+
+	/**
+	 * \brief Add a new detached task to the queue.
+	 * \param function Function to be executed.
+	 * \param args Arguments to the function.
+	 */
+	template<class Function, class... Args>
+	void add_detached_task(Function function, Args&&... args);
 
 	/**
 	 * \brief Blocks calling thread until all tasks in queue are completed.
@@ -127,4 +135,16 @@ inline void thread_pool::thread_main()
 			tasks_completed_.notify_all();
 		}
 	}
+}
+
+template<class Function, class... Args>
+void thread_pool::add_detached_task(Function function, Args&&... args)
+{
+	using return_type = std::invoke_result_t<Function, Args...>;
+	{
+		std::lock_guard l(mutex_q_);
+		++total_tasks_;
+		tasks_queue_.emplace(std::make_unique<callable_derived<return_type>>(std::packaged_task<return_type()>([function, &args...]{ return function(std::forward<Args>(args)...); }) ));
+	}
+	cv_new_task_.notify_one();
 }
