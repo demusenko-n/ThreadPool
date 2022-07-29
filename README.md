@@ -3,4 +3,4 @@ This is the simple implementation of software design pattern with corresponding 
 
 Receiving the returned value is not supported yet, but it will be soon.
 
-C++20 is used
+C++23 is used
