@@ -7,12 +7,11 @@
 #include <future>
 #include <memory>
 #include <functional>
-#include "CopyInitiatesMove.h"
 
 /**
  * \brief ThreadPool class implementation used for effective parallelism.
  */
-class thread_pool
+class thread_pool final
 {
 	void thread_main();
 public:
@@ -58,8 +57,7 @@ public:
 private:
 	mutable std::mutex mutex_q_;
 	mutable std::condition_variable cv_new_task_;
-
-	std::queue<std::function<void()>> tasks_queue_;
+	std::queue<std::move_only_function<void()>> tasks_queue_;
 
 	std::atomic_size_t tasks_completed_;
 	std::atomic_size_t total_tasks_;
@@ -107,7 +105,7 @@ std::future<std::invoke_result_t<Function, Args...>> thread_pool::add_task(Funct
 		std::lock_guard l(mutex_q_);
 		++total_tasks_;
 
-		tasks_queue_.emplace([move_only_task = copy_initiates_move(std::move(packaged_task))]()mutable{move_only_task.object(); });
+		tasks_queue_.emplace([move_only_task = std::move(packaged_task)]()mutable{move_only_task(); });
 	}
 	cv_new_task_.notify_one();
 	return future;
@@ -117,7 +115,7 @@ inline void thread_pool::thread_main()
 {
 	while (true)
 	{
-		std::function<void()> task_to_complete;
+		std::move_only_function<void()> task_to_complete;
 		{
 			std::unique_lock l(mutex_q_);
 			cv_new_task_.wait(l, [this] {return !tasks_queue_.empty() || is_terminated_; });
