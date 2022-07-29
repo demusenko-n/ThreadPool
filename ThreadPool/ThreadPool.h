@@ -98,7 +98,7 @@ std::future<std::invoke_result_t<Function, Args...>> thread_pool::add_task(Funct
 {
 	using return_type = std::invoke_result_t<Function, Args...>;
 
-	std::packaged_task<return_type()> packaged_task([function, &args...]{ return function(std::forward<Args>(args)...); });
+	std::packaged_task<return_type()> packaged_task(std::bind(function, std::forward<Args>(args)...));
 	auto future = packaged_task.get_future();
 
 	{
