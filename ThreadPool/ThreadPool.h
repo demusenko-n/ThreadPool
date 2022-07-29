@@ -6,7 +6,8 @@
 #include <condition_variable>
 #include <future>
 #include <memory>
-#include "Callable.h"
+#include <functional>
+#include "CopyInitiatesMove.h"
 
 /**
  * \brief ThreadPool class implementation used for effective parallelism.
@@ -58,7 +59,7 @@ private:
 	mutable std::mutex mutex_q_;
 	mutable std::condition_variable cv_new_task_;
 
-	std::queue<std::unique_ptr<callable_abstract>> tasks_queue_;
+	std::queue<std::function<void()>> tasks_queue_;
 
 	std::atomic_size_t tasks_completed_;
 	std::atomic_size_t total_tasks_;
@@ -94,7 +95,6 @@ inline void thread_pool::wait_all()const
 	}
 }
 
-
 template<class Function, class... Args>
 std::future<std::invoke_result_t<Function, Args...>> thread_pool::add_task(Function function, Args&&... args)
 {
@@ -106,7 +106,8 @@ std::future<std::invoke_result_t<Function, Args...>> thread_pool::add_task(Funct
 	{
 		std::lock_guard l(mutex_q_);
 		++total_tasks_;
-		tasks_queue_.emplace(std::make_unique<callable_derived<return_type>>(std::move(packaged_task)));
+
+		tasks_queue_.emplace([move_only_task = copy_initiates_move(std::move(packaged_task))]()mutable{move_only_task.object(); });
 	}
 	cv_new_task_.notify_one();
 	return future;
@@ -116,7 +117,7 @@ inline void thread_pool::thread_main()
 {
 	while (true)
 	{
-		std::unique_ptr<callable_abstract> task_to_complete;
+		std::function<void()> task_to_complete;
 		{
 			std::unique_lock l(mutex_q_);
 			cv_new_task_.wait(l, [this] {return !tasks_queue_.empty() || is_terminated_; });
@@ -128,7 +129,7 @@ inline void thread_pool::thread_main()
 			tasks_queue_.pop();
 		}
 
-		(*task_to_complete)();
+		task_to_complete();
 
 		if (++tasks_completed_ == total_tasks_)
 		{
@@ -140,11 +141,10 @@ inline void thread_pool::thread_main()
 template<class Function, class... Args>
 void thread_pool::add_detached_task(Function function, Args&&... args)
 {
-	using return_type = std::invoke_result_t<Function, Args...>;
 	{
 		std::lock_guard l(mutex_q_);
 		++total_tasks_;
-		tasks_queue_.emplace(std::make_unique<callable_derived<return_type>>(std::packaged_task<return_type()>([function, &args...]{ return function(std::forward<Args>(args)...); }) ));
+		tasks_queue_.emplace([function, &args...]{ function(std::forward<Args>(args)...); });
 	}
 	cv_new_task_.notify_one();
 }
