@@ -34,7 +34,7 @@ public:
 	 * \return std::future object to access the result of operation.
 	 */
 	template<class Function, class... Args>
-	std::future<std::invoke_result_t<Function, Args...>> add_task(Function function, Args&&... args);
+	std::future<std::invoke_result_t<Function, Args...>> add_task(Function&& function, Args&&... args);
 
 	/**
 	 * \brief Add a new detached task to the queue.
@@ -42,7 +42,7 @@ public:
 	 * \param args Arguments to the function.
 	 */
 	template<class Function, class... Args>
-	void add_detached_task(Function function, Args&&... args);
+	void add_detached_task(Function&& function, Args&&... args);
 
 	/**
 	 * \brief Blocks calling thread until all tasks in queue are completed.
@@ -94,11 +94,11 @@ inline void thread_pool::wait_all()const
 }
 
 template<class Function, class... Args>
-std::future<std::invoke_result_t<Function, Args...>> thread_pool::add_task(Function function, Args&&... args)
+std::future<std::invoke_result_t<Function, Args...>> thread_pool::add_task(Function&& function, Args&&... args)
 {
 	using return_type = std::invoke_result_t<Function, Args...>;
-
-	std::packaged_task<return_type()> packaged_task(std::bind(function, std::forward<Args>(args)...));
+	
+	std::packaged_task<return_type()> packaged_task(std::bind(std::forward<Function>(function), std::forward<Args>(args)...));
 	auto future = packaged_task.get_future();
 
 	{
@@ -137,12 +137,12 @@ inline void thread_pool::thread_main()
 }
 
 template<class Function, class... Args>
-void thread_pool::add_detached_task(Function function, Args&&... args)
+void thread_pool::add_detached_task(Function&& function, Args&&... args)
 {
 	{
 		std::lock_guard l(mutex_q_);
 		++total_tasks_;
-		tasks_queue_.emplace([function, &args...]{ function(std::forward<Args>(args)...); });
+		tasks_queue_.emplace(std::bind(std::forward<Function>(function), std::forward<Args>(args)...));
 	}
 	cv_new_task_.notify_one();
 }
