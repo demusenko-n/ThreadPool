@@ -33,7 +33,7 @@ public:
 	 * \param args Arguments to the function.
 	 * \return std::future object to access the result of operation.
 	 */
-	template<class Function, class... Args>
+	template<class Function, class... Args> requires std::invocable<Function, Args...>
 	std::future<std::invoke_result_t<Function, Args...>> add_task(Function&& function, Args&&... args);
 
 	/**
@@ -41,7 +41,7 @@ public:
 	 * \param function Function to be executed.
 	 * \param args Arguments to the function.
 	 */
-	template<class Function, class... Args>
+	template<class Function, class... Args> requires std::invocable<Function, Args...>
 	void add_detached_task(Function&& function, Args&&... args);
 
 	/**
@@ -93,11 +93,11 @@ inline void thread_pool::wait_all()const
 	}
 }
 
-template<class Function, class... Args>
+template<class Function, class... Args> requires std::invocable<Function, Args...>
 std::future<std::invoke_result_t<Function, Args...>> thread_pool::add_task(Function&& function, Args&&... args)
 {
 	using return_type = std::invoke_result_t<Function, Args...>;
-	
+
 	std::packaged_task<return_type()> packaged_task(std::bind(std::forward<Function>(function), std::forward<Args>(args)...));
 	auto future = packaged_task.get_future();
 
@@ -136,7 +136,7 @@ inline void thread_pool::thread_main()
 	}
 }
 
-template<class Function, class... Args>
+template<class Function, class... Args> requires std::invocable<Function, Args...>
 void thread_pool::add_detached_task(Function&& function, Args&&... args)
 {
 	{
